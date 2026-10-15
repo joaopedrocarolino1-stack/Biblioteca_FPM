@@ -167,7 +167,7 @@ const dbErr=e=>/duplicate|unique/i.test(e.message||'')?'CPF ou e-mail já cadast
 function save(){}
 async function loadAll(){
  const old=new Map(B.map(b=>[b.id,b]));
- const [lv,ls]=await Promise.all([sb.from('livros_disponiveis').select('*').order('id'),sb.from('emprestimos').select('id,livro_id,aluno_id,retirada,prevista,profiles(nome)').is('devolvido_em',null)]);
+ const [lv,ls]=await Promise.all([sb.from('livros_disponiveis').select('*').order('id'),sb.from('emprestimos').select('id,livro_id,aluno_id,retirada,prevista,profiles!aluno_id(nome)').is('devolvido_em',null)]);
  B.splice(0,B.length,...(lv.data||[]).map(r=>{const o=old.get(r.id)||{};return{id:r.id,t:r.titulo,a:r.autor,g:r.genero||'Geral',o:r.ano,p:r.editora,i:r.isbn,q:r.disponiveis,qt:r.quantidade,c:PAL[r.id%PAL.length],img:r.capa_url||o.img,tried:o.tried}}));
  if(isStaff()){S=((await sb.from('profiles').select('*').eq('papel','aluno').order('matricula')).data||[]).map(mapS)}else{const {data:pf}=await sb.from('profiles').select('*').eq('id',prof.id).single();if(pf)prof=pf;S=[mapS(prof)]}
  const td=Date.parse(new Date().toDateString());
@@ -234,7 +234,7 @@ async function reqBook(id){const {error}=await sb.from('solicitacoes').insert({a
 let lastErr='';
 async function loadAll(){try{
  const old=new Map(B.map(b=>[b.id,b]));
- const [lv,ls]=await Promise.all([sb.from('livros_disponiveis').select('*').order('id'),sb.from('emprestimos').select('id,livro_id,aluno_id,retirada,prevista,profiles(nome)').is('devolvido_em',null)]);
+ const [lv,ls]=await Promise.all([sb.from('livros_disponiveis').select('*').order('id'),sb.from('emprestimos').select('id,livro_id,aluno_id,retirada,prevista,profiles!aluno_id(nome)').is('devolvido_em',null)]);
  if(lv.error)throw new Error('Não foi possível ler os livros: '+lv.error.message);
  if(ls.error)throw new Error('Não foi possível ler os empréstimos: '+ls.error.message);
  let nS,nlog=[],nRQ=[],nfav=favs,np=prof;
