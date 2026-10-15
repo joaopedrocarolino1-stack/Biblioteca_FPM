@@ -147,7 +147,7 @@ else if(page=='empa')h=`<h2>Empréstimos</h2><button class="btn" onclick="newLoa
 else if(page=='dev')h=`<h2>Devoluções</h2><div class="grid">${L.map((l,i)=>`<div class="card"><b>${bk(l.b).t}</b><p class="mut">${l.s} · prevista ${l.due}</p>${l.left<0?'<span class="tag t-bad">Atrasado</span>':''}<div class="row"><button class="btn g" onclick="ret(${i})">Registrar devolução</button></div></div>`).join('')||'<p class="mut">Nenhum empréstimo pendente.</p>'}</div>`;
 else if(page=='atr')h=`<h2>Livros Atrasados</h2><div class="card tw"><table><tr><th>Aluno</th><th>Livro</th><th>Devolução</th><th>Atraso</th><th></th></tr>${L.filter(l=>l.left<0).map(l=>`<tr><td>${l.s}</td><td>${bk(l.b).t}</td><td>${l.due}</td><td style="color:var(--bad)">${-l.left} dias</td><td><button class="btn r" onclick="toast('Lembrete enviado para ${l.s}')">Enviar lembrete</button></td></tr>`).join('')||'<tr><td>Sem atrasos </td></tr>'}</table></div>`;
 else if(page=='atend'){const x=S.find(y=>y.id==at);h=`<h2>Atendimento por QR Code</h2><p class="mut">Leia o QR Code do aluno para abrir os dados e registrar o empréstimo rapidamente.</p><div class="card"><div class="bar"><input id="ac" placeholder="Código lido do QR (ex.: ALU-0001)"><button class="btn" onclick="attend()">Abrir aluno</button><button class="btn o" onclick="simScan()">Simular leitura</button><button class="btn o" onclick="camOn()">Ler com a câmera</button></div><video id="vid" playsinline muted style="display:none;width:100%;max-width:420px;border-radius:10px;background:#000;margin-top:10px"></video></div>${x?stuCard(x):''}`}
-else if(page=='alunos')h=`<h2>Alunos</h2><p class="mut">Clique em Editar, altere os campos e confirme em Salvar alterações. O e-mail de acesso não pode ser alterado aqui.</p><div class="bar"><input placeholder="Buscar por nome, CPF ou e-mail" value="${sq}" oninput="sq=this.value;$('sb').innerHTML=stuRows()"><button class="btn" onclick="editStu(0)">+ Novo Aluno</button></div><div class="card tw" style="margin-top:12px"><table><tr><th>Nome</th><th>CPF</th><th>Idade</th><th>Turma</th><th>Telefone</th><th>E-mail</th><th></th></tr><tbody id="sb">${stuRows()}</tbody></table></div>`;
+else if(page=='alunos')h=`<h2>Alunos</h2><p class="mut">Clique em Editar, altere os campos e confirme em Salvar alterações. O e-mail de acesso não pode ser alterado aqui.</p><div class="bar"><input placeholder="Buscar por nome, CPF ou e-mail" value="${sq}" oninput="sq=this.value;$('sb').innerHTML=stuRows()"><button class="btn" onclick="editStu(0)">+ Novo Aluno</button> <button class="btn o" onclick="testFn()">Testar conexão</button></div><div class="card tw" style="margin-top:12px"><table><tr><th>Nome</th><th>CPF</th><th>Idade</th><th>Turma</th><th>Telefone</th><th>E-mail</th><th></th></tr><tbody id="sb">${stuRows()}</tbody></table></div>`;
 else if(page=='aud')h=`<h2>Auditoria do Sistema</h2><div class="card tw"><table><tr><th>Data</th><th>Hora</th><th>Usuário</th><th>Ação</th><th>Descrição</th></tr>${log.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`;
 m.innerHTML=h;save()}
 function newBook(){openM(`<h3>Novo Livro</h3><input id="nt" placeholder="Título"><input id="na" placeholder="Autor"><input id="np" placeholder="Editora"><input id="ni" placeholder="ISBN"><input id="nq" type="number" placeholder="Quantidade" value="1"><button class="btn" onclick="addBook()">Salvar</button>`)}
@@ -179,8 +179,8 @@ async function loadAll(){
  }else{log=[];RQ=[];favs=new Set(((await sb.from('favoritos').select('livro_id')).data||[]).map(r=>r.livro_id))}
 }
 async function startSession(uid,kind){
- const {data:pf}=await sb.from('profiles').select('*').eq('id',uid).single(),er=$('lerr'),bad=m=>{if(er)er.textContent=m;return false};
- if(!pf||!pf.ativo)return bad('Acesso não autorizado. Procure a biblioteca.');
+ const {data:pf,error:pe}=await sb.from('profiles').select('*').eq('id',uid).single(),er=$('lerr'),bad=m=>{if(er)er.textContent=m;return false};
+ if(!pf)return bad(pe?'Não foi possível ler o perfil: '+pe.message:'Esta conta existe, mas não tem perfil cadastrado. Rode o passo que cria o perfil da equipe no SQL.');if(!pf.ativo)return bad('Acesso não autorizado. Procure a biblioteca.');
  const staff=pf.papel!='aluno';
  if(kind=='equipe'&&!staff)return bad('Esta área é exclusiva da equipe da biblioteca.');
  if(kind=='aluno'&&staff)return bad('Use a aba Administrador / Bibliotecário.');
@@ -190,9 +190,9 @@ async function doLogin(kind){
  const er=$('lerr');if(!sb){er.textContent='Não foi possível conectar ao banco de dados.';return}
  er.textContent='Entrando...';
  const {data,error}=await sb.auth.signInWithPassword({email:$('le').value.trim().toLowerCase(),password:$('lp').value});
- if(error){er.textContent='E-mail ou senha incorretos.';return}
+ if(error){const m=error.message||'';er.textContent=/invalid login/i.test(m)?'E-mail ou senha incorretos.':/not confirmed/i.test(m)?'E-mail ainda não confirmado no Supabase.':/fetch|network|load/i.test(m)?'Sem conexão com o Supabase. O ambiente pode estar bloqueando acessos externos.':'Erro de login: '+m;return}
  if(!await startSession(data.user.id,kind))await sb.auth.signOut()}
-async function boot(){tab('aluno');if(!sb)return;try{const {data}=await sb.auth.getSession();if(data&&data.session&&!await startSession(data.session.user.id))await sb.auth.signOut()}catch(e){}}
+async function boot(){tab('aluno');if(!sb){$('lerr').textContent='A conexão com o banco não carregou (sem internet ou bloqueio do ambiente).';return}try{const {data}=await sb.auth.getSession();if(data&&data.session&&!await startSession(data.session.user.id))await sb.auth.signOut()}catch(e){}}
 async function logout(){camOff();if(sb)await sb.auth.signOut();role=null;prof=null;$('app').style.display='none';$('login').style.display='';$('side').classList.remove('open');tab('aluno')}
 function tab(k){$('t1').className='btn'+(k=='aluno'?'':' o');$('t2').className='btn'+(k=='equipe'?'':' o');$('lf').innerHTML=`<input id="le" type="email" placeholder="${k=='equipe'?'E-mail institucional':'E-mail'}" autocomplete="username"><input id="lp" type="password" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key=='Enter')doLogin('${k}')"><div id="lerr"${ER}></div><button class="btn" onclick="doLogin('${k}')">Entrar</button><div class="mut" style="font-size:12px">${k=='equipe'?'Acesso exclusivo da equipe da biblioteca.':'O cadastro e a recuperação de senha são feitos pela biblioteca.'}</div>`}
 function pwModal(){openM(`<h3>Alterar senha</h3><input id="pa" type="password" placeholder="Senha atual"><input id="pn" type="password" placeholder="Nova senha (mín. 8, letras e números)"><input id="pq" type="password" placeholder="Confirmar nova senha"><div id="per"${ER}></div><button class="btn" onclick="savePw()">Salvar nova senha</button><button class="btn o" onclick="closeM()">Cancelar</button>`)}
@@ -230,5 +230,63 @@ async function fav(id){const had=favs.has(id);had?favs.delete(id):favs.add(id);r
  const {error}=await(had?sb.from('favoritos').delete().eq('aluno_id',prof.id).eq('livro_id',id):sb.from('favoritos').insert({aluno_id:prof.id,livro_id:id}));
  if(error){had?favs.add(id):favs.delete(id);render();toast('Não foi possível salvar o favorito')}else toast(had?'Removido dos favoritos':'Adicionado aos favoritos')}
 async function reqBook(id){const {error}=await sb.from('solicitacoes').insert({aluno_id:prof.id,livro_id:id});if(error&&!/duplicate|unique/i.test(error.message)){toast('Não foi possível enviar a solicitação');return}toast('Solicitação enviada! Apresente seu QR Code na biblioteca.')}
+/* ===== Correções: confirmar a gravação de verdade e não esconder erros ===== */
+let lastErr='';
+async function loadAll(){try{
+ const old=new Map(B.map(b=>[b.id,b]));
+ const [lv,ls]=await Promise.all([sb.from('livros_disponiveis').select('*').order('id'),sb.from('emprestimos').select('id,livro_id,aluno_id,retirada,prevista,profiles(nome)').is('devolvido_em',null)]);
+ if(lv.error)throw new Error('Não foi possível ler os livros: '+lv.error.message);
+ if(ls.error)throw new Error('Não foi possível ler os empréstimos: '+ls.error.message);
+ let nS,nlog=[],nRQ=[],nfav=favs,np=prof;
+ if(isStaff()){const rs=await sb.from('profiles').select('*').eq('papel','aluno').order('matricula');if(rs.error)throw new Error('Não foi possível ler os alunos: '+rs.error.message);nS=(rs.data||[]).map(mapS);
+  const [a,r]=await Promise.all([sb.from('auditoria').select('*').order('criado_em',{ascending:false}).limit(200),sb.from('solicitacoes').select('livro_id,aluno_id')]);
+  if(a.error)throw new Error('Não foi possível ler a auditoria: '+a.error.message);
+  nlog=(a.data||[]).map(x=>[fdt(x.criado_em),fh(x.criado_em),x.usuario_nome||'—',x.acao,x.descricao||'']);
+  nRQ=(r.data||[]).map(x=>{const s=nS.find(y=>y.uid==x.aluno_id);return s&&{b:x.livro_id,s:s.id}}).filter(Boolean);
+ }else{const rp=await sb.from('profiles').select('*').eq('id',prof.id).single();if(rp.error||!rp.data)throw new Error('Não foi possível ler o seu perfil: '+(rp.error?rp.error.message:'sem registro'));np=rp.data;nS=[mapS(np)];
+  const fv=await sb.from('favoritos').select('livro_id');if(fv.error)throw new Error('Não foi possível ler os favoritos: '+fv.error.message);nfav=new Set((fv.data||[]).map(r=>r.livro_id))}
+ const td=Date.parse(new Date().toDateString());
+ B.splice(0,B.length,...(lv.data||[]).map(r=>{const o=old.get(r.id)||{};return{id:r.id,t:r.titulo,a:r.autor,g:r.genero||'Geral',o:r.ano,p:r.editora,i:r.isbn,q:r.disponiveis,qt:r.quantidade,c:PAL[r.id%PAL.length],img:r.capa_url||o.img,tried:o.tried}}));
+ L=(ls.data||[]).map(r=>({id:r.id,b:r.livro_id,uid:r.aluno_id,s:(r.profiles||{}).nome||'—',d:fd(r.retirada),due:fd(r.prevista),left:Math.round((Date.parse(r.prevista+'T00:00')-td)/864e5)}));
+ S=nS;log=nlog;RQ=nRQ;favs=nfav;prof=np;return true
+}catch(e){lastErr=e.message||'Erro ao carregar os dados';toast(lastErr);return false}}
+async function startSession(uid,kind){
+ const {data:pf,error:pe}=await sb.from('profiles').select('*').eq('id',uid).single(),er=$('lerr'),bad=m=>{if(er)er.textContent=m;return false};
+ if(!pf)return bad(pe?'Não foi possível ler o perfil: '+pe.message:'Esta conta existe, mas não tem perfil cadastrado. Peça à biblioteca para refazer o cadastro.');
+ if(!pf.ativo)return bad('Acesso não autorizado. Procure a biblioteca.');
+ const staff=pf.papel!='aluno';
+ if(kind=='equipe'&&!staff)return bad('Esta área é exclusiva da equipe da biblioteca.');
+ if(kind=='aluno'&&staff)return bad('Use a aba Administrador / Bibliotecário.');
+ prof=pf;role=staff?'adm':'aluno';if(!staff)meId=numM(pf.matricula);
+ if(!await loadAll()){role=null;return bad('Não foi possível carregar os dados: '+lastErr)}
+ enter(role);if(staff)coverAll();return true}
+async function fnErr(e){if(e&&e.name=='FunctionsFetchError')return 'Não foi possível contatar a função gerir-alunos. Confira se ela foi publicada e se o site pode acessar o Supabase.';
+ try{const j=await e.context.json();return j.erro||j.message||j.msg||e.message}catch(_){try{const t=await e.context.text();return t||e.message}catch(__){return(e&&e.message)||'Erro'}}}
+async function saveStu(id){const n=$('sn').value.trim(),c=$('sc').value,i=+$('si').value,t=$('sx').value.trim(),f=$('sf').value,m=$('sm').value.trim().toLowerCase(),pw=$('sp')?$('sp').value:'';let e='';
+ if(n.length<3)e='Informe o nome completo.';else if(c.length!=14)e='O CPF deve ter 11 dígitos.';else if(!(i>=5&&i<=99))e='Idade inválida.';else if(f&&f.replace(/\D/g,'').length<10)e='Telefone inválido.';else if(!/^\S+@\S+\.\S+$/.test(m))e='E-mail inválido.';else if(S.some(y=>y.c==c&&y.id!=id))e='CPF já cadastrado.';else if(!id&&!okPw(pw))e='A senha provisória precisa ter 8 ou mais caracteres, com letras e números.';
+ const fail=x=>{$('se').textContent=x};if(e)return fail(e);
+ let nid=null,msg='Dados salvos';
+ if(id){const o=S.find(y=>y.id==id),{data:ud,error}=await sb.from('profiles').update({nome:n,cpf:c,idade:i,turma:t,telefone:f}).eq('id',o.uid).select();
+  if(error)return fail(dbErr(error));if(!ud||ud.length!=1)return fail('Nada foi alterado no banco (sem permissão ou registro inexistente).')}
+ else{const {data,error}=await sb.functions.invoke('gerir-alunos',{body:{acao:'criar',nome:n,cpf:c,idade:i,turma:t,telefone:f,email:m,senha:pw}});
+  if(error)return fail(await fnErr(error));if(!data||!data.ok||!data.id)return fail('O servidor não confirmou a criação do aluno.');
+  const {data:chk,error:ce}=await sb.from('profiles').select('id,matricula').eq('id',data.id).single();
+  if(ce||!chk)return fail('A conta foi criada, mas o perfil não foi encontrado no banco ('+(ce?ce.message:'sem registro')+'). Tente cadastrar de novo.');
+  nid=chk.id;msg='Aluno cadastrado. Matrícula '+chk.matricula}
+ if(!await loadAll())return fail('Salvo, mas a lista não pôde ser atualizada: '+lastErr);
+ if(nid&&!S.some(y=>y.uid==nid))return fail('O aluno foi salvo, mas não apareceu na listagem. Verifique as permissões (RLS).');
+ closeM();toast(msg);render()}
+async function delStu(id){const x=S.find(y=>y.id==id);if(!x)return;const {error}=await sb.functions.invoke('gerir-alunos',{body:{acao:'excluir',id:x.uid}});if(error){closeM();toast(await fnErr(error));return}
+ if(!await loadAll())return;if(S.some(y=>y.uid==x.uid)){closeM();toast('A exclusão não foi confirmada pelo banco.');return}closeM();toast('Aluno excluído');render()}
+async function saveMe(){const n=$('mn').value.trim(),i=+$('mi').value,t=$('mt').value.trim();let m='';if(n.length<3)m='Informe o nome completo.';else if(!(i>=5&&i<=99))m='Idade inválida.';if(m){$('mx').textContent=m;return}
+ const {data:ud,error}=await sb.from('profiles').update({nome:n,idade:i,turma:t,telefone:$('mf').value}).eq('id',prof.id).select();
+ if(error){$('mx').textContent=dbErr(error);return}if(!ud||ud.length!=1){$('mx').textContent='Nada foi alterado no banco (sem permissão).';return}
+ if(!await loadAll())return;closeM();toast('Dados atualizados. Seu QR Code foi renovado.');render()}
+async function addBook(){const t=$('nt').value.trim();if(!t){toast('Informe o título');return}
+ const {data,error}=await sb.from('livros').insert({titulo:t,autor:$('na').value.trim()||'—',editora:$('np').value.trim()||null,isbn:$('ni').value.trim()||null,genero:'Geral',quantidade:+$('nq').value||1}).select();
+ if(error){toast(dbErr(error));return}if(!data||data.length!=1){toast('O livro não foi gravado no banco (sem permissão).');return}
+ closeM();if(!await loadAll())return;toast('Livro cadastrado');render();coverAll()}
+async function testFn(){const {data,error}=await sb.functions.invoke('gerir-alunos',{body:{acao:'ping'}});
+ openM(`<h3>Teste da conexão</h3>${error?`<p style="color:var(--bad)">${await fnErr(error)}</p>`:`<p>A função respondeu.<br>Seu papel: <b>${data.papel}</b><br>Chaves do servidor: <b>${data.chaves?'ok':'ausentes'}</b></p>`}<button class="btn o" onclick="closeM()">Fechar</button>`)}
 boot();
 </script></body></html>
