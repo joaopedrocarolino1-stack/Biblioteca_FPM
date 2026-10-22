@@ -147,7 +147,7 @@ else if(page=='dev')h=`<h2>Devoluções</h2><div class="grid">${L.map((l,i)=>`<d
 else if(page=='atr')h=`<h2>Livros Atrasados</h2><div class="card tw"><table><tr><th>Aluno</th><th>Livro</th><th>Devolução</th><th>Atraso</th><th></th></tr>${L.filter(l=>l.left<0).map(l=>`<tr><td>${l.s}</td><td>${bk(l.b).t}</td><td>${l.due}</td><td style="color:var(--bad)">${-l.left} dias</td><td><button class="btn r" onclick="toast('Lembrete enviado para ${l.s}')">Enviar lembrete</button></td></tr>`).join('')||'<tr><td>Sem atrasos </td></tr>'}</table></div>`;
 else if(page=='atend'){const x=S.find(y=>y.id==at);h=`<h2>Atendimento por QR Code</h2><p class="mut">Leia o QR Code do aluno para abrir os dados e registrar o empréstimo rapidamente.</p><div class="card"><div class="bar"><button class="btn" onclick="camOn()">Ler com a câmera</button><button class="btn o" onclick="$('qf').click()">Ler de uma foto</button><input id="qf" type="file" accept="image/*" capture="environment" style="display:none" onchange="readPhoto(this)"></div><video id="vid" playsinline muted style="display:none;width:100%;max-width:420px;border-radius:10px;background:#000;margin-top:10px"></video><div id="qs" class="mut" style="margin-top:8px"></div></div>${x?stuCard(x):''}`}
 else if(page=='alunos')h=`<h2>Alunos</h2><p class="mut">Clique em Editar, altere os campos e confirme em Salvar alterações. O e-mail de acesso não pode ser alterado aqui.</p><div class="bar"><input placeholder="Buscar por nome, CPF ou e-mail" value="${sq}" oninput="sq=this.value;$('sb').innerHTML=stuRows()"><button class="btn" onclick="editStu(0)">+ Novo Aluno</button> <button class="btn o" onclick="testFn()">Testar conexão</button></div><div class="card tw" style="margin-top:12px"><table><tr><th>Nome</th><th>CPF</th><th>Idade</th><th>Turma</th><th>Telefone</th><th>E-mail</th><th></th></tr><tbody id="sb">${stuRows()}</tbody></table></div>`;
-else if(page=='aud')h=`<h2>Auditoria do Sistema</h2><div class="card tw"><table><tr><th>Data</th><th>Hora</th><th>Usuário</th><th>Ação</th><th>Descrição</th></tr>${log.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`;
+else if(page=='aud')h=`<h2>Auditoria do Sistema</h2><p class="mut">Tudo o que foi feito no sistema, do mais recente para o mais antigo, agrupado por dia.</p><div class="bar"><input placeholder="Buscar por data, hora, usuário, ação ou descrição" value="${esc(aq)}" oninput="aq=this.value;$('au').innerHTML=audHtml()"><select onchange="ap=this.value;$('au').innerHTML=audHtml()"><option value="">Todos os períodos</option><option value="h" ${ap=='h'?'selected':''}>Hoje</option><option value="7" ${ap=='7'?'selected':''}>Últimos 7 dias</option><option value="30" ${ap=='30'?'selected':''}>Últimos 30 dias</option></select><button class="btn o" onclick="aq='';ap='';render()">Limpar</button></div><div id="au" style="margin-top:12px">${audHtml()}</div>`;
 m.innerHTML=h;save()}
 function newBook(){openM(`<h3>Novo Livro</h3><input id="nt" placeholder="Título"><input id="na" placeholder="Autor"><input id="np" placeholder="Editora"><input id="ni" placeholder="ISBN"><input id="nq" type="number" placeholder="Quantidade" value="1"><button class="btn" onclick="addBook()">Salvar</button>`)}
 function addBook(){const t=$('nt').value||'Sem título';B.push({id:Math.max(...B.map(x=>x.id))+1,t,a:$('na').value||'—',g:'Geral',y:null,p:$('np').value,i:$('ni').value,q:+$('nq').value||1,c:'#1f4e79'});log.unshift(['07/10/2026','—','Administrador','Cadastro de livro',t]);closeM();toast('Livro cadastrado: LIV-'+String(B[B.length-1].id).padStart(4,'0'));render();coverAll()}
@@ -173,7 +173,7 @@ async function loadAll(){
  L=(ls.data||[]).map(r=>({id:r.id,b:r.livro_id,uid:r.aluno_id,s:(r.profiles||{}).nome||'—',d:fd(r.retirada),due:fd(r.prevista),left:Math.round((Date.parse(r.prevista+'T00:00')-td)/864e5)}));
  if(isStaff()){
   const [a,r]=await Promise.all([sb.from('auditoria').select('*').order('criado_em',{ascending:false}).limit(200),sb.from('solicitacoes').select('livro_id,aluno_id')]);
-  log=(a.data||[]).map(x=>[fdt(x.criado_em),fh(x.criado_em),x.usuario_nome||'—',x.acao,x.descricao||'']);
+  log=(a.data||[]).map(x=>[fdt(x.criado_em),fh(x.criado_em),x.usuario_nome||'—',x.acao,x.descricao||'',x.criado_em]);
   RQ=(r.data||[]).map(x=>{const s=S.find(y=>y.uid==x.aluno_id);return s&&{b:x.livro_id,s:s.id}}).filter(Boolean);
  }else{log=[];RQ=[];favs=new Set(((await sb.from('favoritos').select('livro_id')).data||[]).map(r=>r.livro_id))}
 }
@@ -184,7 +184,7 @@ async function startSession(uid,kind){
  if(kind=='equipe'&&!staff)return bad('Esta área é exclusiva da equipe da biblioteca.');
  if(kind=='aluno'&&staff)return bad('Use a aba Administrador / Bibliotecário.');
  prof=pf;role=staff?'adm':'aluno';if(!staff)meId=numM(pf.matricula);
- await loadAll();enter(role);if(staff)coverAll();return true}
+ await loadAll();enter(role);rtStart();if(staff)coverAll();return true}
 async function doLogin(kind){
  const er=$('lerr');if(!sb){er.textContent='Não foi possível conectar ao banco de dados.';return}
  er.textContent='Entrando...';
@@ -192,7 +192,7 @@ async function doLogin(kind){
  if(error){const m=error.message||'';er.textContent=/invalid login/i.test(m)?'E-mail ou senha incorretos.':/not confirmed/i.test(m)?'E-mail ainda não confirmado no Supabase.':/fetch|network|load/i.test(m)?'Sem conexão com o Supabase. O ambiente pode estar bloqueando acessos externos.':'Erro de login: '+m;return}
  if(!await startSession(data.user.id,kind))await sb.auth.signOut()}
 async function boot(){tab('aluno');if(!sb){$('lerr').textContent='A conexão com o banco não carregou (sem internet ou bloqueio do ambiente).';return}try{const {data}=await sb.auth.getSession();if(data&&data.session&&!await startSession(data.session.user.id))await sb.auth.signOut()}catch(e){}}
-async function logout(){camOff();if(sb)await sb.auth.signOut();role=null;prof=null;$('app').style.display='none';$('login').style.display='';$('side').classList.remove('open');tab('aluno')}
+async function logout(){camOff();rtStop();if(sb)await sb.auth.signOut();role=null;prof=null;$('app').style.display='none';$('login').style.display='';$('side').classList.remove('open');tab('aluno')}
 function tab(k){$('t1').className='btn'+(k=='aluno'?'':' o');$('t2').className='btn'+(k=='equipe'?'':' o');$('lf').innerHTML=`<input id="le" type="email" placeholder="${k=='equipe'?'E-mail institucional':'E-mail'}" autocomplete="username"><input id="lp" type="password" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key=='Enter')doLogin('${k}')"><div id="lerr"${ER}></div><button class="btn" onclick="doLogin('${k}')">Entrar</button><div class="mut" style="font-size:12px">${k=='equipe'?'Acesso exclusivo da equipe da biblioteca.':'O cadastro e a recuperação de senha são feitos pela biblioteca.'}</div>`}
 function pwModal(){openM(`<h3>Alterar senha</h3><input id="pa" type="password" placeholder="Senha atual"><input id="pn" type="password" placeholder="Nova senha (mín. 8, letras e números)"><input id="pq" type="password" placeholder="Confirmar nova senha"><div id="per"${ER}></div><button class="btn" onclick="savePw()">Salvar nova senha</button><button class="btn o" onclick="closeM()">Cancelar</button>`)}
 async function savePw(){const p=$('pn').value;let r='';if(!okPw(p))r='A senha precisa ter 8 ou mais caracteres, com letras e números.';else if(p!=$('pq').value)r='As senhas não conferem.';
@@ -240,7 +240,7 @@ async function loadAll(){try{
  if(isStaff()){const rs=await sb.from('profiles').select('*').eq('papel','aluno').order('matricula');if(rs.error)throw new Error('Não foi possível ler os alunos: '+rs.error.message);nS=(rs.data||[]).map(mapS);
   const [a,r]=await Promise.all([sb.from('auditoria').select('*').order('criado_em',{ascending:false}).limit(200),sb.from('solicitacoes').select('livro_id,aluno_id')]);
   if(a.error)throw new Error('Não foi possível ler a auditoria: '+a.error.message);
-  nlog=(a.data||[]).map(x=>[fdt(x.criado_em),fh(x.criado_em),x.usuario_nome||'—',x.acao,x.descricao||'']);
+  nlog=(a.data||[]).map(x=>[fdt(x.criado_em),fh(x.criado_em),x.usuario_nome||'—',x.acao,x.descricao||'',x.criado_em]);
   nRQ=(r.data||[]).map(x=>{const s=nS.find(y=>y.uid==x.aluno_id);return s&&{b:x.livro_id,s:s.id}}).filter(Boolean);
  }else{const rp=await sb.from('profiles').select('*').eq('id',prof.id).single();if(rp.error||!rp.data)throw new Error('Não foi possível ler o seu perfil: '+(rp.error?rp.error.message:'sem registro'));np=rp.data;nS=[mapS(np)];
   const fv=await sb.from('favoritos').select('livro_id');if(fv.error)throw new Error('Não foi possível ler os favoritos: '+fv.error.message);nfav=new Set((fv.data||[]).map(r=>r.livro_id))}
@@ -248,7 +248,7 @@ async function loadAll(){try{
  B.splice(0,B.length,...(lv.data||[]).map(r=>{const o=old.get(r.id)||{};return{id:r.id,t:r.titulo,a:r.autor,g:r.genero||'Geral',o:r.ano,p:r.editora,i:r.isbn,q:r.disponiveis,qt:r.quantidade,c:PAL[r.id%PAL.length],img:r.capa_url||o.img,tried:o.tried}}));
  L=(ls.data||[]).map(r=>({id:r.id,b:r.livro_id,uid:r.aluno_id,s:(r.profiles||{}).nome||'—',d:fd(r.retirada),due:fd(r.prevista),left:Math.round((Date.parse(r.prevista+'T00:00')-td)/864e5)}));
  S=nS;log=nlog;RQ=nRQ;favs=nfav;prof=np;return true
-}catch(e){lastErr=e.message||'Erro ao carregar os dados';toast(lastErr);return false}}
+}catch(e){lastErr=e.message||'Erro ao carregar os dados';if(!window.__quiet)toast(lastErr);return false}}
 async function startSession(uid,kind){
  const {data:pf,error:pe}=await sb.from('profiles').select('*').eq('id',uid).single(),er=$('lerr'),bad=m=>{if(er)er.textContent=m;return false};
  if(!pf)return bad(pe?'Não foi possível ler o perfil: '+pe.message:'Esta conta existe, mas não tem perfil cadastrado. Peça à biblioteca para refazer o cadastro.');
@@ -258,7 +258,7 @@ async function startSession(uid,kind){
  if(kind=='aluno'&&staff)return bad('Use a aba Administrador / Bibliotecário.');
  prof=pf;role=staff?'adm':'aluno';if(!staff)meId=numM(pf.matricula);
  if(!await loadAll()){role=null;return bad('Não foi possível carregar os dados: '+lastErr)}
- enter(role);if(staff)coverAll();return true}
+ enter(role);rtStart();if(staff)coverAll();return true}
 async function fnErr(e){if(e&&e.name=='FunctionsFetchError')return 'Não foi possível contatar a função gerir-alunos. Confira se ela foi publicada e se o site pode acessar o Supabase.';
  try{const j=await e.context.json();return j.erro||j.message||j.msg||e.message}catch(_){try{const t=await e.context.text();return t||e.message}catch(__){return(e&&e.message)||'Erro'}}}
 async function saveStu(id){const n=$('sn').value.trim(),c=$('sc').value,i=+$('si').value,t=$('sx').value.trim(),f=$('sf').value,m=$('sm').value.trim().toLowerCase(),pw=$('sp')?$('sp').value:'';let e='';
@@ -1572,5 +1572,29 @@ async function delBook(id){const {data,error}=await sb.from('livros').delete().e
  if(error){closeM();toast(error.code=='23503'||/foreign key/i.test(error.message||'')?'Este livro tem histórico de empréstimos e não pode ser excluído. Edite-o e zere a quantidade para tirá-lo de circulação.':dbErr(error));return}
  if(!data||data.length!=1){closeM();toast('O livro não foi excluído (sem permissão ou já removido).');return}
  if(!await loadAll())return;closeM();toast('Livro excluído');render()}
+/* ===== Atualização automática: tempo real do Supabase + reserva por intervalo ===== */
+let rtTimer=0,rtCh=null;
+const busyUI=()=>{const m=$('modal'),a=document.activeElement;return(m&&m.style.display=='grid')||!!stream||!!(a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)&&$('main').contains(a))};
+let rtPend=false;
+async function syncNow(){if(!role||!sb)return;if(busyUI()){rtPend=true;return}rtPend=false;window.__quiet=true;const ok=await loadAll();window.__quiet=false;if(!ok)return;if(busyUI()){rtPend=true;return}render()}
+function rtKick(){clearTimeout(rtTimer);rtTimer=setTimeout(syncNow,700)}
+function rtStop(){try{if(rtCh&&sb)sb.removeChannel(rtCh)}catch(e){}rtCh=null}
+function rtStart(){try{if(!sb||!sb.channel)return;rtStop();let ch=sb.channel('fpm-sync');['livros','emprestimos','profiles','favoritos','solicitacoes','auditoria'].forEach(t=>{ch=ch.on('postgres_changes',{event:'*',schema:'public',table:t},rtKick)});ch.subscribe();rtCh=ch}catch(e){}}
+setInterval(()=>{if(role&&!document.hidden)syncNow()},30000);
+setInterval(()=>{if(rtPend&&role)syncNow()},3000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&role)rtKick()});
+/* ===== Auditoria organizada por dia/hora, com busca e filtro de período ===== */
+let aq='',ap='';
+const AC_T={livros:'livro',profiles:'perfil',emprestimos:'empréstimo',favoritos:'favorito',solicitacoes:'solicitação'},AC_V={INSERT:'Cadastro',UPDATE:'Alteração',DELETE:'Exclusão'};
+const fAc=a=>{const m=String(a).match(/^(INSERT|UPDATE|DELETE) em (\w+)$/);return m?AC_V[m[1]]+' de '+(AC_T[m[2]]||m[2]):a};
+const tagAc=a=>{const m=String(a).match(/^(INSERT|UPDATE|DELETE)/);return `<span class="tag ${m?(m[1]=='INSERT'?'t-ok':m[1]=='DELETE'?'t-bad':'t-w'):'t-ok'}">${esc(fAc(a))}</span>`};
+function dayLabel(s){const p=String(s).split('/'),dt=new Date(+p[2],+p[1]-1,+p[0]);if(isNaN(dt))return s;const w=dt.toLocaleDateString('pt-BR',{weekday:'long'}),h=new Date(),o=new Date(Date.now()-864e5),f=d=>d.toLocaleDateString('pt-BR');return w.charAt(0).toUpperCase()+w.slice(1)+', '+s+(s==f(h)?' (hoje)':s==f(o)?' (ontem)':'')}
+function audHtml(){
+ let rows=log.every(r=>r[5])?[...log].sort((a,b)=>String(b[5]).localeCompare(String(a[5]))):log;
+ if(ap){const c=ap=='h'?new Date(new Date().toDateString()):new Date(Date.now()-(+ap)*864e5);rows=rows.filter(r=>!r[5]||new Date(r[5])>=c)}
+ const q=aq.trim().toLowerCase();if(q)rows=rows.filter(r=>[r[0],r[1],r[2],fAc(r[3]),r[3],r[4]].join(' ').toLowerCase().includes(q));
+ if(!rows.length)return '<div class="card"><p class="mut">Nenhum registro encontrado.</p></div>';
+ const g=[];rows.forEach(r=>{let k=g[g.length-1];if(!k||k.d!=r[0]){k={d:r[0],r:[]};g.push(k)}k.r.push(r)});
+ return `<p class="mut">${rows.length} registro(s)${q||ap?' encontrado(s)':''}</p>`+g.map(k=>`<div class="card tw" style="margin-bottom:12px"><b>${dayLabel(k.d)}</b> <span class="mut">· ${k.r.length} ${k.r.length==1?'ação':'ações'}</span><table><tr><th>Hora</th><th>Usuário</th><th>Ação</th><th>Descrição</th></tr>${k.r.map(r=>`<tr><td style="white-space:nowrap">${r[1]}</td><td>${esc(r[2])}</td><td>${tagAc(r[3])}</td><td>${esc(r[4])}</td></tr>`).join('')}</table></div>`).join('')}
 boot();
 </script></body></html>
