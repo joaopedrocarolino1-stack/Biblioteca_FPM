@@ -1555,7 +1555,7 @@ function askDelBook(id){const b=bk(id),emp=(b.qt==null?0:b.qt-b.q);
  if(emp>0){openM(`<h3>Não é possível excluir</h3><p><b>${b.t}</b> tem ${emp} exemplar(es) emprestado(s). Registre a devolução antes de excluir.</p><button class="btn o" onclick="closeM()">Entendi</button>`);return}
  openM(`<h3>Excluir livro</h3><p>Excluir <b>${b.t}</b> (LIV-${String(b.id).padStart(4,'0')}) do catálogo? Os favoritos e solicitações desse livro também serão removidos. Esta ação não pode ser desfeita.</p><button class="btn r" onclick="delBook(${id})">Sim, excluir</button><button class="btn o" onclick="closeM()">Cancelar</button>`)}
 async function delBook(id){const {data,error}=await sb.from('livros').delete().eq('id',id).select();
- if(error){closeM();toast(error.code=='23503'||/foreign key/i.test(error.message||'')?'Este livro tem histórico de empréstimos e não pode ser excluído. Edite-o e zere a quantidade para tirá-lo de circulação.':dbErr(error));return}
+ if(error){closeM();toast(error.code=='23503'||/foreign key/i.test(error.message||'')?'O banco ainda não permite excluir livros que já foram emprestados. Rode o arquivo supabase-excluir-livros.sql no Supabase e tente de novo.':dbErr(error));return}
  if(!data||data.length!=1){closeM();toast('O livro não foi excluído (sem permissão ou já removido).');return}
  if(!await loadAll())return;closeM();toast('Livro excluído');render()}
 /* ===== Atualização automática: tempo real do Supabase + reserva por intervalo ===== */
@@ -1614,7 +1614,7 @@ async function saveBook(id){const b=bk(id),t=$('et').value.trim(),a=$('ea').valu
  let capaOk=true;if(rmCover){try{await sb.storage.from('capas').remove(['livro-'+id+'.jpg'])}catch(e){}}else if(coverBlob)capaOk=await uploadCover(id);
  coverBlob=null;rmCover=false;if(!await loadAll())return fail('Salvo, mas a lista não pôde ser atualizada: '+lastErr);closeM();toast(capaOk?'Livro atualizado':'Livro atualizado, mas a capa não foi salva.');render()}
 async function delBook(id){const {data,error}=await sb.from('livros').delete().eq('id',id).select();
- if(error){closeM();toast(error.code=='23503'||/foreign key/i.test(error.message||'')?'Este livro tem histórico de empréstimos e não pode ser excluído. Edite-o e zere a quantidade para tirá-lo de circulação.':dbErr(error));return}
+ if(error){closeM();toast(error.code=='23503'||/foreign key/i.test(error.message||'')?'O banco ainda não permite excluir livros que já foram emprestados. Rode o arquivo supabase-excluir-livros.sql no Supabase e tente de novo.':dbErr(error));return}
  if(!data||data.length!=1){closeM();toast('O livro não foi excluído (sem permissão ou já removido).');return}
  try{await sb.storage.from('capas').remove(['livro-'+id+'.jpg'])}catch(e){}
  if(!await loadAll())return;closeM();toast('Livro excluído');render()}
